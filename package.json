@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "dependencies": {
-    "stripe": "^14.0.0",
-    "axios": "^1.6.0"
+    "axios": "^1.9.0",
+    "stripe": "^14.0.0"
   }
 }
