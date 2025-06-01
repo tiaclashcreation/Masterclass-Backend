@@ -1,5 +1,5 @@
-import Stripe from 'stripe';
-import axios from 'axios';
+const Stripe = require('stripe');
+const axios = require('axios');
 
 export const config = { api: { bodyParser: false } };
 
