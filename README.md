@@ -6,3 +6,9 @@ This project contains serverless API endpoints for Stripe Checkout, Kajabi, and 
 - `/api/masterclass/stripe-webhook.js`: Handles Stripe webhooks and automates Kajabi/ConvertKit
 
 Deploy to Vercel or another serverless platform. Set all required environment variables in your deployment dashboard.
+
+
+
+
+
+testing redeploy
