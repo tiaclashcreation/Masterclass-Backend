@@ -22,7 +22,9 @@ async function fetchJson(url, options) {
 }
 
 export default async function handler(req, res) {
+  console.log('Webhook handler invoked.');
   if (req.method !== 'POST') {
+    console.log('Method not allowed:', req.method);
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
@@ -33,6 +35,7 @@ export default async function handler(req, res) {
   let event;
   try {
     event = stripe.webhooks.constructEvent(buf, sig, endpointSecret);
+    console.log('Stripe event received:', event.type);
   } catch (err) {
     console.error('Webhook signature verification failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
@@ -40,18 +43,19 @@ export default async function handler(req, res) {
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
+    console.log('Processing checkout.session.completed event.');
     if (session.payment_status === 'paid') {
       try {
         const customerEmail = session.customer_email || session.customer_details?.email;
         const customerName = session.customer_details?.name || '';
+        console.log('Customer email:', customerEmail);
+        console.log('Customer name:', customerName);
 
-        // --- KAJABI ENROLLMENT ---
+        // --- KAJABI ENROLLMENT (UPDATED) ---
         try {
           const KAJABI_API_KEY = process.env.KAJABI_API_KEY;
-          const KAJABI_API_SECRET = process.env.KAJABI_API_SECRET;
-          const KAJABI_SITE_ID = process.env.KAJABI_SITE_ID;
+          const KAJABI_SUBDOMAIN = process.env.KAJABI_SUBDOMAIN; // e.g., "clash-creation"
           const KAJABI_OFFER_ID = process.env.KAJABI_OFFER_ID;
-          const KAJABI_BASE_URL = process.env.KAJABI_BASE_URL || 'https://api.kajabi.com';
 
           let firstName = '';
           let lastName = '';
@@ -60,25 +64,40 @@ export default async function handler(req, res) {
             firstName = nameParts[0];
             lastName = nameParts.slice(1).join(' ');
           }
+          console.log('Attempting Kajabi enrollment:', { customerEmail, firstName, lastName });
 
-          const kajabiRes = await fetchJson(
-            `${KAJABI_BASE_URL}/sites/${KAJABI_SITE_ID}/offers/${KAJABI_OFFER_ID}/memberships`,
+          // Create or find the user
+          const userResponse = await fetchJson(
+            `https://${KAJABI_SUBDOMAIN}.mykajabi.com/api/v1/users`,
             {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'User-Agent': 'Kajabi-API-Client',
-                'Kajabi-Api-Key': KAJABI_API_KEY,
-                'Kajabi-Api-Secret': KAJABI_API_SECRET
+                'Authorization': `Bearer ${KAJABI_API_KEY}`
               },
               body: JSON.stringify({
                 email: customerEmail,
-                first_name: firstName,
-                last_name: lastName
+                name: customerName || `${firstName} ${lastName}`.trim()
               })
             }
           );
-          console.log('Kajabi enrollment response:', kajabiRes);
+
+          // Grant access to the offer
+          const grantAccessResponse = await fetchJson(
+            `https://${KAJABI_SUBDOMAIN}.mykajabi.com/api/v1/offers/${KAJABI_OFFER_ID}/grant_access`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${KAJABI_API_KEY}`
+              },
+              body: JSON.stringify({
+                email: customerEmail
+              })
+            }
+          );
+
+          console.log('Kajabi enrollment response:', grantAccessResponse);
         } catch (kajabiError) {
           console.error('Error enrolling user in Kajabi:', kajabiError.message);
         }
@@ -86,16 +105,16 @@ export default async function handler(req, res) {
         // --- CONVERTKIT LOGIC ---
         try {
           const KIT_API_KEY = process.env.KIT_API_KEY;
-          const KIT_API_BASE = 'https://api.kit.com/v4';
+          const KIT_API_BASE = 'https://api.convertkit.com/v3';
           const PURCHASE_FORM_ID = process.env.KIT_PURCHASE_FORM_ID;
 
           // 1. Create or update subscriber in ConvertKit
+          console.log('Attempting ConvertKit subscriber creation:', customerEmail);
           const subscriberResponse = await fetchJson(
-            `${KIT_API_BASE}/subscribers`,
+            `${KIT_API_BASE}/subscribers?api_secret=${KIT_API_KEY}`,
             {
               method: 'POST',
               headers: {
-                'Authorization': `Bearer ${KIT_API_KEY}`,
                 'Content-Type': 'application/json'
               },
               body: JSON.stringify({
@@ -118,12 +137,12 @@ export default async function handler(req, res) {
 
           // 2. Optionally add to a specific form/sequence
           if (PURCHASE_FORM_ID) {
+            console.log('Adding subscriber to purchase form/sequence:', PURCHASE_FORM_ID);
             await fetchJson(
-              `${KIT_API_BASE}/forms/${PURCHASE_FORM_ID}/subscribers/${subscriber.id}`,
+              `${KIT_API_BASE}/forms/${PURCHASE_FORM_ID}/subscribers/${subscriber.id}?api_secret=${KIT_API_KEY}`,
               {
                 method: 'POST',
                 headers: {
-                  'Authorization': `Bearer ${KIT_API_KEY}`,
                   'Content-Type': 'application/json'
                 }
               }
@@ -132,12 +151,12 @@ export default async function handler(req, res) {
           }
 
           // 3. Create a purchase record in ConvertKit
+          console.log('Creating purchase record in ConvertKit');
           await fetchJson(
-            `${KIT_API_BASE}/purchases`,
+            `${KIT_API_BASE}/purchases?api_secret=${KIT_API_KEY}`,
             {
               method: 'POST',
               headers: {
-                'Authorization': `Bearer ${KIT_API_KEY}`,
                 'Content-Type': 'application/json'
               },
               body: JSON.stringify({
@@ -167,6 +186,7 @@ export default async function handler(req, res) {
           console.error('Error processing ConvertKit integration:', convertkitError.message);
         }
 
+        console.log('Webhook processing complete. Returning success.');
         return res.status(200).json({
           success: true,
           message: 'Purchase processed successfully',
@@ -182,5 +202,6 @@ export default async function handler(req, res) {
     }
   }
 
+  console.log('Event type not handled or payment not paid. Returning received.');
   return res.status(200).json({ received: true });
 }
