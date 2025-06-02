@@ -1,5 +1,4 @@
 const Stripe = require('stripe');
-const axios = require('axios');
 
 export const config = { api: { bodyParser: false } };
 
@@ -11,6 +10,15 @@ async function buffer(readable) {
     chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
   }
   return Buffer.concat(chunks);
+}
+
+async function fetchJson(url, options) {
+  const res = await fetch(url, options);
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`HTTP ${res.status}: ${errorText}`);
+  }
+  return res.json();
 }
 
 export default async function handler(req, res) {
@@ -53,25 +61,26 @@ export default async function handler(req, res) {
             lastName = nameParts.slice(1).join(' ');
           }
 
-          const kajabiRes = await axios.post(
+          const kajabiRes = await fetchJson(
             `${KAJABI_BASE_URL}/sites/${KAJABI_SITE_ID}/offers/${KAJABI_OFFER_ID}/memberships`,
             {
-              email: customerEmail,
-              first_name: firstName,
-              last_name: lastName
-            },
-            {
+              method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 'User-Agent': 'Kajabi-API-Client',
                 'Kajabi-Api-Key': KAJABI_API_KEY,
                 'Kajabi-Api-Secret': KAJABI_API_SECRET
-              }
+              },
+              body: JSON.stringify({
+                email: customerEmail,
+                first_name: firstName,
+                last_name: lastName
+              })
             }
           );
-          console.log('Kajabi enrollment response:', kajabiRes.data);
+          console.log('Kajabi enrollment response:', kajabiRes);
         } catch (kajabiError) {
-          console.error('Error enrolling user in Kajabi:', kajabiError.response?.data || kajabiError.message);
+          console.error('Error enrolling user in Kajabi:', kajabiError.message);
         }
 
         // --- CONVERTKIT LOGIC ---
@@ -81,37 +90,38 @@ export default async function handler(req, res) {
           const PURCHASE_FORM_ID = process.env.KIT_PURCHASE_FORM_ID;
 
           // 1. Create or update subscriber in ConvertKit
-          const subscriberResponse = await axios.post(
+          const subscriberResponse = await fetchJson(
             `${KIT_API_BASE}/subscribers`,
             {
-              email_address: customerEmail,
-              first_name: customerName.split(' ')[0] || '',
-              fields: {
-                'Purchase Date': new Date().toISOString(),
-                'Product': 'The Viral Video Fundamentals: Your First 1,000,000 views',
-                'Amount': session.amount_total ? `$${(session.amount_total / 100).toFixed(2)}` : '',
-                'Payment Method': session.payment_method_types?.[0] || 'card',
-                'Stripe Customer ID': session.customer,
-                'Stripe Session ID': session.id
-              }
-            },
-            {
+              method: 'POST',
               headers: {
                 'Authorization': `Bearer ${KIT_API_KEY}`,
                 'Content-Type': 'application/json'
-              }
+              },
+              body: JSON.stringify({
+                email_address: customerEmail,
+                first_name: customerName.split(' ')[0] || '',
+                fields: {
+                  'Purchase Date': new Date().toISOString(),
+                  'Product': 'The Viral Video Fundamentals: Your First 1,000,000 views',
+                  'Amount': session.amount_total ? `$${(session.amount_total / 100).toFixed(2)}` : '',
+                  'Payment Method': session.payment_method_types?.[0] || 'card',
+                  'Stripe Customer ID': session.customer,
+                  'Stripe Session ID': session.id
+                }
+              })
             }
           );
 
-          const subscriber = subscriberResponse.data.subscriber;
+          const subscriber = subscriberResponse.subscriber;
           console.log(`Subscriber created/updated: ${subscriber.id}`);
 
           // 2. Optionally add to a specific form/sequence
           if (PURCHASE_FORM_ID) {
-            await axios.post(
+            await fetchJson(
               `${KIT_API_BASE}/forms/${PURCHASE_FORM_ID}/subscribers/${subscriber.id}`,
-              {},
               {
+                method: 'POST',
                 headers: {
                   'Authorization': `Bearer ${KIT_API_KEY}`,
                   'Content-Type': 'application/json'
@@ -122,38 +132,39 @@ export default async function handler(req, res) {
           }
 
           // 3. Create a purchase record in ConvertKit
-          await axios.post(
+          await fetchJson(
             `${KIT_API_BASE}/purchases`,
             {
-              purchase: {
-                email_address: customerEmail,
-                first_name: customerName.split(' ')[0] || '',
-                transaction_id: session.id,
-                status: 'paid',
-                currency: session.currency ? session.currency.toUpperCase() : 'USD',
-                total: session.amount_total ? session.amount_total / 100 : undefined,
-                subtotal: (session.amount_subtotal || session.amount_total) ? (session.amount_subtotal || session.amount_total) / 100 : undefined,
-                tax: (session.total_details?.amount_tax || 0) / 100,
-                transaction_time: new Date().toISOString(),
-                products: [{
-                  name: 'The Viral Video Fundamentals: Your First 1,000,000 views',
-                  pid: 'viral-video-fundamentals',
-                  lid: `${session.id}-1`,
-                  quantity: 1,
-                  unit_price: (session.amount_subtotal || session.amount_total) ? (session.amount_subtotal || session.amount_total) / 100 : undefined
-                }]
-              }
-            },
-            {
+              method: 'POST',
               headers: {
                 'Authorization': `Bearer ${KIT_API_KEY}`,
                 'Content-Type': 'application/json'
-              }
+              },
+              body: JSON.stringify({
+                purchase: {
+                  email_address: customerEmail,
+                  first_name: customerName.split(' ')[0] || '',
+                  transaction_id: session.id,
+                  status: 'paid',
+                  currency: session.currency ? session.currency.toUpperCase() : 'USD',
+                  total: session.amount_total ? session.amount_total / 100 : undefined,
+                  subtotal: (session.amount_subtotal || session.amount_total) ? (session.amount_subtotal || session.amount_total) / 100 : undefined,
+                  tax: (session.total_details?.amount_tax || 0) / 100,
+                  transaction_time: new Date().toISOString(),
+                  products: [{
+                    name: 'The Viral Video Fundamentals: Your First 1,000,000 views',
+                    pid: 'viral-video-fundamentals',
+                    lid: `${session.id}-1`,
+                    quantity: 1,
+                    unit_price: (session.amount_subtotal || session.amount_total) ? (session.amount_subtotal || session.amount_total) / 100 : undefined
+                  }]
+                }
+              })
             }
           );
           console.log(`Purchase record created in ConvertKit`);
         } catch (convertkitError) {
-          console.error('Error processing ConvertKit integration:', convertkitError.response?.data || convertkitError.message);
+          console.error('Error processing ConvertKit integration:', convertkitError.message);
         }
 
         return res.status(200).json({
@@ -162,11 +173,10 @@ export default async function handler(req, res) {
         });
 
       } catch (error) {
-        console.error('Error processing purchase:', error.response?.data || error.message);
+        console.error('Error processing purchase:', error.message);
         return res.status(200).json({
           success: false,
           error: error.message,
-          details: error.response?.data
         });
       }
     }
