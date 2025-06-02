@@ -51,139 +51,52 @@ export default async function handler(req, res) {
         console.log('Customer email:', customerEmail);
         console.log('Customer name:', customerName);
 
-        // --- KAJABI ENROLLMENT (UPDATED) ---
+        // --- KAJABI ENROLLMENT USING WEBHOOK ---
         try {
-          const KAJABI_API_KEY = process.env.KAJABI_API_KEY;
-          const KAJABI_SUBDOMAIN = process.env.KAJABI_SUBDOMAIN; // e.g., "clash-creation"
-          const KAJABI_OFFER_ID = process.env.KAJABI_OFFER_ID;
-
-          let firstName = '';
-          let lastName = '';
-          if (customerName) {
-            const nameParts = customerName.trim().split(' ');
-            firstName = nameParts[0];
-            lastName = nameParts.slice(1).join(' ');
+          const KAJABI_ACTIVATION_URL = process.env.KAJABI_ACTIVATION_URL;
+          if (!KAJABI_ACTIVATION_URL) {
+            throw new Error('KAJABI_ACTIVATION_URL not configured');
           }
-          console.log('Attempting Kajabi enrollment:', { customerEmail, firstName, lastName });
-
-          // Create or find the user
-          const userResponse = await fetchJson(
-            `https://${KAJABI_SUBDOMAIN}.mykajabi.com/api/v1/users`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${KAJABI_API_KEY}`
-              },
-              body: JSON.stringify({
-                email: customerEmail,
-                name: customerName || `${firstName} ${lastName}`.trim()
-              })
-            }
-          );
-
-          // Grant access to the offer
-          const grantAccessResponse = await fetchJson(
-            `https://${KAJABI_SUBDOMAIN}.mykajabi.com/api/v1/offers/${KAJABI_OFFER_ID}/grant_access`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${KAJABI_API_KEY}`
-              },
-              body: JSON.stringify({
-                email: customerEmail
-              })
-            }
-          );
-
-          console.log('Kajabi enrollment response:', grantAccessResponse);
+          console.log('Attempting Kajabi enrollment via webhook');
+          const kajabiResponse = await fetchJson(KAJABI_ACTIVATION_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              name: customerName,
+              email: customerEmail,
+              external_user_id: customerEmail
+            })
+          });
+          console.log('Kajabi webhook response:', kajabiResponse);
         } catch (kajabiError) {
           console.error('Error enrolling user in Kajabi:', kajabiError.message);
         }
 
-        // --- CONVERTKIT LOGIC ---
+        // --- SIMPLIFIED CONVERTKIT ---
         try {
           const KIT_API_KEY = process.env.KIT_API_KEY;
-          const KIT_API_BASE = 'https://api.convertkit.com/v3';
           const PURCHASE_FORM_ID = process.env.KIT_PURCHASE_FORM_ID;
-
-          // 1. Create or update subscriber in ConvertKit
-          console.log('Attempting ConvertKit subscriber creation:', customerEmail);
-          const subscriberResponse = await fetchJson(
-            `${KIT_API_BASE}/subscribers?api_secret=${KIT_API_KEY}`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                email_address: customerEmail,
-                first_name: customerName.split(' ')[0] || '',
-                fields: {
-                  'Purchase Date': new Date().toISOString(),
-                  'Product': 'The Viral Video Fundamentals: Your First 1,000,000 views',
-                  'Amount': session.amount_total ? `$${(session.amount_total / 100).toFixed(2)}` : '',
-                  'Payment Method': session.payment_method_types?.[0] || 'card',
-                  'Stripe Customer ID': session.customer,
-                  'Stripe Session ID': session.id
-                }
-              })
-            }
-          );
-
-          const subscriber = subscriberResponse.subscriber;
-          console.log(`Subscriber created/updated: ${subscriber.id}`);
-
-          // 2. Optionally add to a specific form/sequence
-          if (PURCHASE_FORM_ID) {
-            console.log('Adding subscriber to purchase form/sequence:', PURCHASE_FORM_ID);
-            await fetchJson(
-              `${KIT_API_BASE}/forms/${PURCHASE_FORM_ID}/subscribers/${subscriber.id}?api_secret=${KIT_API_KEY}`,
+          if (PURCHASE_FORM_ID && KIT_API_KEY) {
+            console.log('Adding to ConvertKit form:', PURCHASE_FORM_ID);
+            const response = await fetchJson(
+              `https://api.convertkit.com/v3/forms/${PURCHASE_FORM_ID}/subscribe?api_secret=${KIT_API_KEY}`,
               {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json'
-                }
+                },
+                body: JSON.stringify({
+                  email: customerEmail,
+                  first_name: customerName.split(' ')[0] || ''
+                })
               }
             );
-            console.log(`Added subscriber to purchase form/sequence`);
+            console.log('ConvertKit response:', response);
           }
-
-          // 3. Create a purchase record in ConvertKit
-          console.log('Creating purchase record in ConvertKit');
-          await fetchJson(
-            `${KIT_API_BASE}/purchases?api_secret=${KIT_API_KEY}`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                purchase: {
-                  email_address: customerEmail,
-                  first_name: customerName.split(' ')[0] || '',
-                  transaction_id: session.id,
-                  status: 'paid',
-                  currency: session.currency ? session.currency.toUpperCase() : 'USD',
-                  total: session.amount_total ? session.amount_total / 100 : undefined,
-                  subtotal: (session.amount_subtotal || session.amount_total) ? (session.amount_subtotal || session.amount_total) / 100 : undefined,
-                  tax: (session.total_details?.amount_tax || 0) / 100,
-                  transaction_time: new Date().toISOString(),
-                  products: [{
-                    name: 'The Viral Video Fundamentals: Your First 1,000,000 views',
-                    pid: 'viral-video-fundamentals',
-                    lid: `${session.id}-1`,
-                    quantity: 1,
-                    unit_price: (session.amount_subtotal || session.amount_total) ? (session.amount_subtotal || session.amount_total) / 100 : undefined
-                  }]
-                }
-              })
-            }
-          );
-          console.log(`Purchase record created in ConvertKit`);
-        } catch (convertkitError) {
-          console.error('Error processing ConvertKit integration:', convertkitError.message);
+        } catch (error) {
+          console.error('ConvertKit error:', error.message);
         }
 
         console.log('Webhook processing complete. Returning success.');
