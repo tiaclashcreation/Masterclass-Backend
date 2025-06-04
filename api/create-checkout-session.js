@@ -17,9 +17,17 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { priceId, couponCode, customerEmail } = req.body;
+  const { priceId, customerEmail } = req.body;
 
   try {
+    // Fetch the promotion code ID for 'TCA4' from Stripe
+    const promotionCodes = await stripe.promotionCodes.list({
+      code: 'TCA4',
+      active: true,
+      limit: 1,
+    });
+    const promoCodeId = promotionCodes.data[0]?.id;
+
     let sessionConfig = {
       mode: 'payment',
       success_url: `${process.env.DOMAIN || 'https://your-domain.com'}/success?session_id={CHECKOUT_SESSION_ID}`,
@@ -39,11 +47,10 @@ export default async function handler(req, res) {
       customer_creation: 'always',
     };
 
-    if (couponCode) {
-      sessionConfig.discounts = [{ coupon: couponCode }];
-    } else {
-      sessionConfig.allow_promotion_codes = true;
+    if (promoCodeId) {
+      sessionConfig.discounts = [{ promotion_code: promoCodeId }];
     }
+    // If promo code is not found or expired, no discount will be applied (full price)
 
     const session = await stripe.checkout.sessions.create(sessionConfig);
     return res.status(200).json({ sessionId: session.id });
