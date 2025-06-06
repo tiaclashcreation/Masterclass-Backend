@@ -37,7 +37,7 @@ export default async function handler(req, res) {
       billing_address_collection: 'required',
       customer_email: customerEmail || undefined,
       customer_creation: 'always',
-      discounts: [{ coupon: 'CLASHSECRET' }], // Always apply the CLASHSECRET coupon
+      discounts: [{ coupon: 'EXPIREDCOUPON' }], // Temporarily use an invalid coupon to test fallback
     };
 
     try {
