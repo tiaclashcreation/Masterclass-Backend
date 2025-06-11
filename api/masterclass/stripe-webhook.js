@@ -52,26 +52,33 @@ export default async function handler(req, res) {
         console.log('Customer name:', customerName);
 
         // --- KAJABI ENROLLMENT USING WEBHOOK ---
-        try {
-          const KAJABI_ACTIVATION_URL = process.env.KAJABI_ACTIVATION_URL;
-          if (!KAJABI_ACTIVATION_URL) {
-            throw new Error('KAJABI_ACTIVATION_URL not configured');
+        if (
+          session.metadata &&
+          session.metadata.product === 'The Viral Video Fundamentals: Your First 1,000,000 views'
+        ) {
+          try {
+            const KAJABI_ACTIVATION_URL = process.env.KAJABI_ACTIVATION_URL;
+            if (!KAJABI_ACTIVATION_URL) {
+              throw new Error('KAJABI_ACTIVATION_URL not configured');
+            }
+            console.log('Attempting Kajabi enrollment via webhook');
+            const kajabiResponse = await fetchJson(KAJABI_ACTIVATION_URL, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                name: customerName,
+                email: customerEmail,
+                external_user_id: customerEmail
+              })
+            });
+            console.log('Kajabi webhook response:', kajabiResponse);
+          } catch (kajabiError) {
+            console.error('Error enrolling user in Kajabi:', kajabiError.message);
           }
-          console.log('Attempting Kajabi enrollment via webhook');
-          const kajabiResponse = await fetchJson(KAJABI_ACTIVATION_URL, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              name: customerName,
-              email: customerEmail,
-              external_user_id: customerEmail
-            })
-          });
-          console.log('Kajabi webhook response:', kajabiResponse);
-        } catch (kajabiError) {
-          console.error('Error enrolling user in Kajabi:', kajabiError.message);
+        } else {
+          console.log('Skipping Kajabi enrollment for product:', session.metadata?.product);
         }
 
         // --- SIMPLIFIED CONVERTKIT ---
