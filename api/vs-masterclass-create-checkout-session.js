@@ -2,10 +2,6 @@ import Stripe from 'stripe';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-// Actual price IDs
-const MAIN_COURSE_PRICE_ID = 'price_1RYweyBlWJBhJeWFpOuUOCK9'; // Vertical Shortcut (main)
-const TEAM_TRAINING_PRICE_ID = 'price_1RYx3LBlWJBhJeWF8GHSyvh5'; // Team Training add-on (same product)
-
 export default async function handler(req, res) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', 'https://clashcreation.com');
@@ -21,14 +17,35 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { priceIds, customerEmail } = req.body;
-  if (!Array.isArray(priceIds) || priceIds.length === 0) {
-    return res.status(400).json({ error: 'Missing priceIds' });
-  }
+  const { addTeamTraining, customerEmail } = req.body;
 
-  // Ensure main course is always present
-  if (!priceIds.includes(MAIN_COURSE_PRICE_ID)) {
-    return res.status(400).json({ error: 'Main course must be included to purchase.' });
+  // Always include the main course
+  const line_items = [
+    {
+      price_data: {
+        currency: 'gbp',
+        unit_amount: 350000, // £3,500.00 in pence
+        product_data: {
+          name: 'The Vertical Shortcut - Main Package',
+          description: 'Turn your personal brand into a personal machine with our proven system for short form content.'
+        },
+      },
+      quantity: 1,
+    }
+  ];
+
+  if (addTeamTraining) {
+    line_items.push({
+      price_data: {
+        currency: 'gbp',
+        unit_amount: 75000, // £750.00 in pence
+        product_data: {
+          name: 'The Vertical Shortcut - Team Training Add-on',
+          description: 'Team training for your content team.'
+        },
+      },
+      quantity: 1,
+    });
   }
 
   try {
@@ -38,7 +55,7 @@ export default async function handler(req, res) {
       cancel_url: `https://clashcreation.com/vs-masterclass/cancel`,
       automatic_tax: { enabled: true },
       tax_id_collection: { enabled: true },
-      line_items: priceIds.map(price => ({ price, quantity: 1 })),
+      line_items,
       metadata: {
         product: 'The Vertical Shortcut',
         payment_type: 'one-time',
