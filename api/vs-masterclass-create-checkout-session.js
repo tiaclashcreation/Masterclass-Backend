@@ -3,8 +3,8 @@ import Stripe from 'stripe';
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 // Actual price IDs
-const MAIN_COURSE_PRICE_ID = 'price_1RYweyBlWJBhJeWFpOuUOCK9'; // Vertical Shortcut (updated)
-const TEAM_TRAINING_PRICE_ID = 'price_1RYwboBlWJBhJeWF7F3NUqWv'; // Team Training add-on
+const MAIN_COURSE_PRICE_ID = 'price_1RYweyBlWJBhJeWFpOuUOCK9'; // Vertical Shortcut (main)
+const TEAM_TRAINING_PRICE_ID = 'price_1RYx3LBlWJBhJeWF8GHSyvh5'; // Team Training add-on (same product)
 
 export default async function handler(req, res) {
   // CORS headers
