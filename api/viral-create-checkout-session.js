@@ -51,8 +51,8 @@ export default async function handler(req, res) {
   try {
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      success_url: `https://clashcreation.com/vs-masterclass/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `https://clashcreation.com/vs-masterclass/cancel`,
+      success_url: `https://clashcreation.com/viral/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `https://clashcreation.com/viral/cancel`,
       automatic_tax: { enabled: true },
       tax_id_collection: { enabled: true },
       line_items,
