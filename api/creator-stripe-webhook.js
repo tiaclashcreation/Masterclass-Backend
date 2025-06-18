@@ -12,6 +12,15 @@ async function buffer(readable) {
   return Buffer.concat(chunks);
 }
 
+async function fetchJson(url, options) {
+  const res = await fetch(url, options);
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`HTTP ${res.status}: ${errorText}`);
+  }
+  return res.json();
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -25,6 +34,7 @@ export default async function handler(req, res) {
   try {
     event = stripe.webhooks.constructEvent(buf, sig, endpointSecret);
   } catch (err) {
+    console.error('Webhook signature verification failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
@@ -34,58 +44,58 @@ export default async function handler(req, res) {
       try {
         const customerEmail = session.customer_email || session.customer_details?.email;
         const customerName = session.customer_details?.name || '';
-        // --- KAJABI ENROLLMENT ---
+        console.log('Creator Stripe webhook: customerEmail:', customerEmail, 'customerName:', customerName);
+        // --- KAJABI ENROLLMENT (activation URL pattern) ---
         try {
-          const KAJABI_API_KEY = process.env.KAJABI_API_KEY;
-          const KAJABI_SITE_ID = process.env.KAJABI_SITE_ID;
-          const KAJABI_BASE_URL = process.env.KAJABI_BASE_URL || 'https://api.kajabi.com';
-          const OFFER_ID = '2150421081';
-          if (KAJABI_API_KEY && KAJABI_SITE_ID && OFFER_ID) {
-            const response = await fetch(
-              `${KAJABI_BASE_URL}/sites/${KAJABI_SITE_ID}/offers/${OFFER_ID}/grant`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${KAJABI_API_KEY}`,
-                  'Kajabi-Api-Version': '2023-10-16',
-                },
-                body: JSON.stringify({
-                  email: customerEmail,
-                  name: customerName,
-                })
-              }
-            );
-            if (!response.ok) {
-              const errorText = await response.text();
-              console.error('Kajabi enrollment error:', errorText);
-            }
+          const KAJABI_ACTIVATION_URL = process.env.KAJABI_ACTIVATION_URL;
+          if (!KAJABI_ACTIVATION_URL) {
+            throw new Error('KAJABI_ACTIVATION_URL not configured');
           }
-        } catch (error) {
-          console.error('Kajabi enrollment error:', error);
+          console.log('Attempting Kajabi enrollment via activation URL');
+          const kajabiResponse = await fetchJson(KAJABI_ACTIVATION_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              name: customerName,
+              email: customerEmail,
+              external_user_id: customerEmail,
+              offer_id: '2150421081'
+            })
+          });
+          console.log('Kajabi webhook response:', kajabiResponse);
+        } catch (kajabiError) {
+          console.error('Error enrolling user in Kajabi:', kajabiError.message);
         }
         // --- CONVERTKIT KIT FORM SUBSCRIBE ---
         try {
           const KIT_API_KEY = process.env.KIT_API_KEY;
           const KIT_FORM_ID = '8189148';
           if (KIT_FORM_ID && KIT_API_KEY) {
-            await fetch(
+            console.log('Adding to ConvertKit form:', KIT_FORM_ID);
+            const response = await fetchJson(
               `https://api.convertkit.com/v3/forms/${KIT_FORM_ID}/subscribe?api_secret=${KIT_API_KEY}`,
               {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                  'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({
                   email: customerEmail,
                   first_name: customerName.split(' ')[0] || ''
                 })
               }
             );
+            console.log('ConvertKit response:', response);
           }
         } catch (error) {
-          console.error('ConvertKit error:', error);
+          console.error('ConvertKit error:', error.message);
         }
-        return res.status(200).json({ success: true, message: 'Creator purchase processed and enrolled in Kajabi' });
+        console.log('Creator webhook processing complete. Returning success.');
+        return res.status(200).json({ success: true, message: 'Creator purchase processed successfully' });
       } catch (error) {
+        console.error('Error processing Creator purchase:', error.message);
         return res.status(200).json({ success: false, error: error.message });
       }
     }
