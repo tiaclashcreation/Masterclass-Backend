@@ -47,11 +47,11 @@ export default async function handler(req, res) {
         console.log('Creator Stripe webhook: customerEmail:', customerEmail, 'customerName:', customerName);
         // --- KAJABI ENROLLMENT (activation URL pattern) ---
         try {
-          const KAJABI_ACTIVATION_URL = process.env.KAJABI_ACTIVATION_URL;
+          const KAJABI_ACTIVATION_URL = process.env.KAJABI_ACTIVATION_URL_CREATOR;
           if (!KAJABI_ACTIVATION_URL) {
-            throw new Error('KAJABI_ACTIVATION_URL not configured');
+            throw new Error('KAJABI_ACTIVATION_URL_CREATOR not configured');
           }
-          console.log('Attempting Kajabi enrollment via activation URL');
+          console.log('Attempting Kajabi enrollment via Creator activation URL');
           const kajabiResponse = await fetchJson(KAJABI_ACTIVATION_URL, {
             method: 'POST',
             headers: {
@@ -60,8 +60,7 @@ export default async function handler(req, res) {
             body: JSON.stringify({
               name: customerName,
               email: customerEmail,
-              external_user_id: customerEmail,
-              offer_id: '2150421081'
+              external_user_id: customerEmail
             })
           });
           console.log('Kajabi webhook response:', kajabiResponse);
