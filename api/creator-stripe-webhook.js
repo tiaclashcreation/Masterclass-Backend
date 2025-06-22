@@ -45,14 +45,11 @@ export default async function handler(req, res) {
         const customerEmail = session.customer_email || session.customer_details?.email;
         const customerName = session.customer_details?.name || '';
         console.log('Creator Stripe webhook: customerEmail:', customerEmail, 'customerName:', customerName);
-        // --- KAJABI ENROLLMENT (activation URL pattern) ---
+        // --- KAJABI ENROLLMENT (Creator-specific activation URL) ---
         try {
-          const KAJABI_ACTIVATION_URL = process.env.KAJABI_ACTIVATION_URL_CREATOR;
-          if (!KAJABI_ACTIVATION_URL) {
-            throw new Error('KAJABI_ACTIVATION_URL_CREATOR not configured');
-          }
-          console.log('Attempting Kajabi enrollment via Creator activation URL');
-          const kajabiResponse = await fetchJson(KAJABI_ACTIVATION_URL, {
+          const KAJABI_ACTIVATION_URL_CREATOR = 'https://checkout.kajabi.com/webhooks/offers/W5uzsKztGDo9HVzK/2150421081/activate';
+          console.log('Attempting Kajabi Creator enrollment via activation URL');
+          const kajabiResponse = await fetchJson(KAJABI_ACTIVATION_URL_CREATOR, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
@@ -63,9 +60,9 @@ export default async function handler(req, res) {
               external_user_id: customerEmail
             })
           });
-          console.log('Kajabi webhook response:', kajabiResponse);
+          console.log('Kajabi Creator enrollment response:', kajabiResponse);
         } catch (kajabiError) {
-          console.error('Error enrolling user in Kajabi:', kajabiError.message);
+          console.error('Error enrolling user in Kajabi Creator offer:', kajabiError.message);
         }
         // --- CONVERTKIT KIT FORM SUBSCRIBE ---
         try {
