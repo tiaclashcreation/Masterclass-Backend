@@ -44,7 +44,6 @@ export default async function handler(req, res) {
       automatic_tax: { enabled: true },
       tax_id_collection: { enabled: true },
       line_items,
-      discounts: [{ coupon: 'TESTDISCOUNT' }],
       metadata: {
         product: 'Creator',
         payment_type: 'one-time',
