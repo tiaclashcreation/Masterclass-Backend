@@ -1,11 +1,23 @@
 {
   "version": 2,
   "functions": {
-    "api/stripe-webhook.js": {
+    "api/fundamentals-stripe-webhook.js": {
       "maxDuration": 30
     },
-    "api/create-checkout-session.js": {
+    "api/blueprint-stripe-webhook.js": {
       "maxDuration": 30
+    },
+    "api/creator-stripe-webhook.js": {
+      "maxDuration": 30
+    },
+    "api/vs-masterclass-stripe-webhook.js": {
+      "maxDuration": 30
+    },
+    "api/viral-stripe-webhook.js": {
+      "maxDuration": 30
+    },
+    "api/fundamentals-create-checkout-session.js": {
+      "maxDuration": 10
     },
     "api/professional-breakthrough-waitlist.js": {
       "maxDuration": 10
