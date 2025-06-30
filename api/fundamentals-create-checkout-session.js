@@ -19,7 +19,6 @@ export default async function handler(req, res) {
   }
 
   const { customerEmail, couponCode } = req.body;
-  console.log('Received request:', { customerEmail, couponCode });
 
   try {
     let sessionConfig = {
@@ -44,40 +43,17 @@ export default async function handler(req, res) {
 
     // Apply 50% off coupon if code is "LION"
     if (couponCode === 'LION') {
-      console.log('Applying LION coupon');
-      try {
-        // Verify the coupon exists first
-        const coupon = await stripe.coupons.retrieve('LION');
-        console.log('Found coupon:', coupon);
-        
-        sessionConfig.discounts = [{
-          coupon: 'LION'
-        }];
-      } catch (couponError) {
-        console.error('Error retrieving coupon:', couponError);
-        return res.status(400).json({
-          error: 'Invalid coupon code'
-        });
-      }
+      sessionConfig.discounts = [{
+        coupon: 'LION'
+      }];
     }
 
-    console.log('Creating checkout session with config:', sessionConfig);
     const session = await stripe.checkout.sessions.create(sessionConfig);
-    console.log('Session created:', session.id);
     return res.status(200).json({ sessionId: session.id });
   } catch (error) {
-    console.error('Error creating fundamentals checkout session:', error);
-    // Log the full error object for debugging
-    console.error('Full error:', {
-      message: error.message,
-      type: error.type,
-      raw: error.raw,
-      stack: error.stack
-    });
-    
+    console.error('Error creating checkout session:', error);
     return res.status(500).json({
-      error: error.message || 'Failed to create checkout session',
-      details: error.raw || error.type || 'Unknown error'
+      error: error.message || 'Failed to create checkout session'
     });
   }
 } 
