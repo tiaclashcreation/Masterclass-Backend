@@ -17,35 +17,28 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { priceId, customerEmail } = req.body;
-
   try {
-    const sessionConfig = {
-      mode: 'payment',
-      success_url: `https://clashcreation.com/academy/fundamentals/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `https://clashcreation.com/academy/fundamentals/cancel`,
-      automatic_tax: { enabled: true },
-      tax_id_collection: { enabled: true },
-      line_items: [{
-        price: priceId,
-        quantity: 1,
-      }],
-      metadata: {
-        product: 'The Viral Video Fundamentals: Your First 1,000,000 views',
-        payment_type: 'one-time'
-      },
-      billing_address_collection: 'required',
-      customer_email: customerEmail || undefined,
-      customer_creation: 'always',
-      discounts: [{ coupon: 'TESTDISCOUNT' }],
-    };
+    const priceId = 'price_1RVIVNBlWJBhJeWFhzrFPZfx';
 
-    const session = await stripe.checkout.sessions.create(sessionConfig);
-    return res.status(200).json({ sessionId: session.id });
-  } catch (error) {
-    console.error('Error creating fundamentals checkout session:', error);
-    return res.status(400).json({
-      error: error.message || 'Failed to create checkout session'
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      success_url: `${process.env.DOMAIN}/academy/fundamentals/success`,
+      cancel_url: `${process.env.DOMAIN}/academy/fundamentals/cancel`,
+      billing_address_collection: 'required',
+      customer_creation: 'always',
+      discounts: [{ coupon: 'TESTDISCOUNT' }], // Auto-apply TESTDISCOUNT coupon
     });
+
+    res.status(200).json({ sessionId: session.id });
+  } catch (error) {
+    console.error('Error creating checkout session:', error);
+    res.status(500).json({ error: 'Failed to create checkout session' });
   }
 } 
