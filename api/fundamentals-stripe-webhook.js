@@ -22,9 +22,9 @@ async function fetchJson(url, options) {
 }
 
 export default async function handler(req, res) {
-  console.log('Fundamentals webhook handler invoked.');
+  console.log('[FUNDAMENTALS WEBHOOK] Handler invoked.');
   if (req.method !== 'POST') {
-    console.log('Method not allowed:', req.method);
+    console.log('[FUNDAMENTALS WEBHOOK] Method not allowed:', req.method);
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
@@ -35,33 +35,32 @@ export default async function handler(req, res) {
   let event;
   try {
     event = stripe.webhooks.constructEvent(buf, sig, endpointSecret);
-    console.log('Fundamentals Stripe event received:', event.type);
+    console.log('[FUNDAMENTALS WEBHOOK] Stripe event received:', event.type);
   } catch (err) {
-    console.error('Fundamentals webhook signature verification failed:', err.message);
+    console.error('[FUNDAMENTALS WEBHOOK] Signature verification failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
-    console.log('Processing fundamentals checkout.session.completed event.');
-    if (session.payment_status === 'paid') {
-      try {
+  // Handle the event
+  try {
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      console.log('[FUNDAMENTALS WEBHOOK] Processing checkout.session.completed event.');
+      
+      if (session.payment_status === 'paid') {
         const customerEmail = session.customer_email || session.customer_details?.email;
         const customerName = session.customer_details?.name || '';
-        console.log('Fundamentals customer email:', customerEmail);
-        console.log('Fundamentals customer name:', customerName);
+        console.log('[FUNDAMENTALS WEBHOOK] Customer email:', customerEmail);
+        console.log('[FUNDAMENTALS WEBHOOK] Customer name:', customerName);
 
         // --- KAJABI ENROLLMENT USING WEBHOOK ---
-        if (
-          session.metadata &&
-          session.metadata.product === 'The Viral Video Fundamentals: Your First 1,000,000 views'
-        ) {
+        if (session.metadata?.product === 'The Viral Video Fundamentals: Your First 1,000,000 views') {
           try {
             const KAJABI_ACTIVATION_URL = process.env.KAJABI_ACTIVATION_URL;
             if (!KAJABI_ACTIVATION_URL) {
               throw new Error('KAJABI_ACTIVATION_URL not configured');
             }
-            console.log('Attempting Kajabi fundamentals enrollment via webhook');
+            console.log('[FUNDAMENTALS WEBHOOK] Attempting Kajabi enrollment');
             const kajabiResponse = await fetchJson(KAJABI_ACTIVATION_URL, {
               method: 'POST',
               headers: {
@@ -73,20 +72,19 @@ export default async function handler(req, res) {
                 external_user_id: customerEmail
               })
             });
-            console.log('Kajabi fundamentals webhook response:', kajabiResponse);
+            console.log('[FUNDAMENTALS WEBHOOK] Kajabi enrollment successful:', kajabiResponse);
           } catch (kajabiError) {
-            console.error('Error enrolling user in Kajabi fundamentals:', kajabiError.message);
+            console.error('[FUNDAMENTALS WEBHOOK] Kajabi enrollment error:', kajabiError.message);
+            // Don't throw here, continue with ConvertKit
           }
-        } else {
-          console.log('Skipping Kajabi enrollment for product:', session.metadata?.product);
         }
 
-        // --- SIMPLIFIED CONVERTKIT ---
+        // --- CONVERTKIT INTEGRATION ---
         try {
           const KIT_API_KEY = process.env.KIT_API_KEY;
           const PURCHASE_FORM_ID = process.env.KIT_PURCHASE_FORM_ID;
           if (PURCHASE_FORM_ID && KIT_API_KEY) {
-            console.log('Adding to ConvertKit fundamentals form:', PURCHASE_FORM_ID);
+            console.log('[FUNDAMENTALS WEBHOOK] Adding to ConvertKit form:', PURCHASE_FORM_ID);
             const response = await fetchJson(
               `https://api.convertkit.com/v3/forms/${PURCHASE_FORM_ID}/subscribe?api_secret=${KIT_API_KEY}`,
               {
@@ -100,28 +98,25 @@ export default async function handler(req, res) {
                 })
               }
             );
-            console.log('ConvertKit fundamentals response:', response);
+            console.log('[FUNDAMENTALS WEBHOOK] ConvertKit subscription successful:', response);
           }
         } catch (error) {
-          console.error('ConvertKit fundamentals error:', error.message);
+          console.error('[FUNDAMENTALS WEBHOOK] ConvertKit error:', error.message);
+          // Don't throw here, continue with response
         }
-
-        console.log('Fundamentals webhook processing complete. Returning success.');
-        return res.status(200).json({
-          success: true,
-          message: 'Fundamentals purchase processed successfully',
-        });
-
-      } catch (error) {
-        console.error('Error processing fundamentals purchase:', error.message);
-        return res.status(200).json({
-          success: false,
-          error: error.message,
-        });
       }
     }
-  }
 
-  console.log('Fundamentals event type not handled or payment not paid. Returning received.');
-  return res.status(200).json({ received: true });
+    // Always return a 200 response to Stripe
+    console.log('[FUNDAMENTALS WEBHOOK] Processing complete');
+    return res.status(200).json({ received: true });
+    
+  } catch (err) {
+    console.error('[FUNDAMENTALS WEBHOOK] Processing error:', err.message);
+    // Still return a 200 to acknowledge receipt
+    return res.status(200).json({ 
+      received: true,
+      error: err.message 
+    });
+  }
 } 
