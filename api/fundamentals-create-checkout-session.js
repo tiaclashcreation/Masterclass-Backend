@@ -37,8 +37,7 @@ export default async function handler(req, res) {
       },
       billing_address_collection: 'required',
       customer_email: customerEmail || undefined,
-      customer_creation: 'always',
-      discounts: [{ coupon: 'TESTDISCOUNT' }], // Auto-apply TESTDISCOUNT coupon
+      customer_creation: 'always'
     };
 
     try {
