@@ -37,11 +37,10 @@ export default async function handler(req, res) {
       },
       billing_address_collection: 'required',
       customer_email: customerEmail || undefined,
-      customer_creation: 'always',
-      allow_promotion_codes: false // Disable Stripe's built-in promo code field
+      customer_creation: 'always'
     };
 
-    // Apply 50% off coupon if code is "LION"
+    // Only add discount if LION coupon code is provided
     if (couponCode === 'LION') {
       sessionConfig.discounts = [{
         coupon: 'LION'
@@ -52,7 +51,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ sessionId: session.id });
   } catch (error) {
     console.error('Error creating checkout session:', error);
-    return res.status(500).json({
+    return res.status(400).json({
       error: error.message || 'Failed to create checkout session'
     });
   }
