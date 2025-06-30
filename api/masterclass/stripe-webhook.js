@@ -22,9 +22,9 @@ async function fetchJson(url, options) {
 }
 
 export default async function handler(req, res) {
-  console.log('Webhook handler invoked.');
+  console.log('[MASTERCLASS WEBHOOK] Handler invoked.');
   if (req.method !== 'POST') {
-    console.log('Method not allowed:', req.method);
+    console.log('[MASTERCLASS WEBHOOK] Method not allowed:', req.method);
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
@@ -35,15 +35,25 @@ export default async function handler(req, res) {
   let event;
   try {
     event = stripe.webhooks.constructEvent(buf, sig, endpointSecret);
-    console.log('Stripe event received:', event.type);
+    console.log('[MASTERCLASS WEBHOOK] Stripe event received:', event.type);
+
+    // Early return if this is a fundamentals purchase
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      if (session.metadata?.product === 'The Viral Video Fundamentals: Your First 1,000,000 views') {
+        console.log('[MASTERCLASS WEBHOOK] Skipping fundamentals purchase - will be handled by fundamentals webhook');
+        return res.status(200).json({ received: true });
+      }
+    }
   } catch (err) {
-    console.error('Webhook signature verification failed:', err.message);
+    console.error('[MASTERCLASS WEBHOOK] Signature verification failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
+  // Continue with normal processing for non-fundamentals purchases
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
-    console.log('Processing checkout.session.completed event.');
+    console.log('[MASTERCLASS WEBHOOK] Processing checkout.session.completed event.');
     if (session.payment_status === 'paid') {
       try {
         const customerEmail = session.customer_email || session.customer_details?.email;
