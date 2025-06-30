@@ -23,8 +23,8 @@ export default async function handler(req, res) {
   try {
     let sessionConfig = {
       mode: 'payment',
-      success_url: `${process.env.DOMAIN}/academy/fundamentals/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.DOMAIN}/academy/fundamentals/cancel`,
+      success_url: `https://clashcreation.com/fundamentals/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `https://clashcreation.com/fundamentals/cancel`,
       automatic_tax: { enabled: true },
       tax_id_collection: { enabled: true },
       line_items: [{
