@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { customerEmail } = req.body;
+  const { customerEmail, couponCode } = req.body;
 
   try {
     let sessionConfig = {
@@ -37,31 +37,19 @@ export default async function handler(req, res) {
       },
       billing_address_collection: 'required',
       customer_email: customerEmail || undefined,
-      customer_creation: 'always'
+      customer_creation: 'always',
+      allow_promotion_codes: false // Disable Stripe's built-in promo code field
     };
 
-    try {
-      const session = await stripe.checkout.sessions.create(sessionConfig);
-      return res.status(200).json({ sessionId: session.id });
-    } catch (error) {
-      // If coupon is invalid or expired, try again without the discount
-      if (
-        error?.raw?.type === 'invalid_request_error' &&
-        error.raw.message &&
-        (
-          error.raw.message.includes('No such coupon') ||
-          error.raw.message.includes('expired') ||
-          error.raw.message.includes('invalid')
-        )
-      ) {
-        // Remove discounts and try again (full price)
-        delete sessionConfig.discounts;
-        const session = await stripe.checkout.sessions.create(sessionConfig);
-        return res.status(200).json({ sessionId: session.id, fallback: true });
-      } else {
-        throw error;
-      }
+    // Apply 50% off coupon if code is "LION"
+    if (couponCode === 'LION') {
+      sessionConfig.discounts = [{
+        coupon: 'LION'
+      }];
     }
+
+    const session = await stripe.checkout.sessions.create(sessionConfig);
+    return res.status(200).json({ sessionId: session.id });
   } catch (error) {
     console.error('Error creating fundamentals checkout session:', error);
     return res.status(400).json({
