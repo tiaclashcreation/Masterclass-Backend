@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const PRICE_ID = 'price_1RVIVNBlWJBhJeWFhzrFPZfx';
 
 export default async function handler(req, res) {
   // CORS headers
@@ -17,28 +18,55 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  try {
-    const priceId = 'price_1RVIVNBlWJBhJeWFhzrFPZfx';
+  const { customerEmail } = req.body;
 
-    const session = await stripe.checkout.sessions.create({
+  try {
+    let sessionConfig = {
       mode: 'payment',
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
-      success_url: `${process.env.DOMAIN}/academy/fundamentals/success`,
+      success_url: `${process.env.DOMAIN}/academy/fundamentals/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.DOMAIN}/academy/fundamentals/cancel`,
+      automatic_tax: { enabled: true },
+      tax_id_collection: { enabled: true },
+      line_items: [{
+        price: PRICE_ID,
+        quantity: 1,
+      }],
+      metadata: {
+        product: 'The Viral Video Fundamentals: Your First 1,000,000 views',
+        payment_type: 'one-time'
+      },
       billing_address_collection: 'required',
+      customer_email: customerEmail || undefined,
       customer_creation: 'always',
       discounts: [{ coupon: 'TESTDISCOUNT' }], // Auto-apply TESTDISCOUNT coupon
-    });
+    };
 
-    res.status(200).json({ sessionId: session.id });
+    try {
+      const session = await stripe.checkout.sessions.create(sessionConfig);
+      return res.status(200).json({ sessionId: session.id });
+    } catch (error) {
+      // If coupon is invalid or expired, try again without the discount
+      if (
+        error?.raw?.type === 'invalid_request_error' &&
+        error.raw.message &&
+        (
+          error.raw.message.includes('No such coupon') ||
+          error.raw.message.includes('expired') ||
+          error.raw.message.includes('invalid')
+        )
+      ) {
+        // Remove discounts and try again (full price)
+        delete sessionConfig.discounts;
+        const session = await stripe.checkout.sessions.create(sessionConfig);
+        return res.status(200).json({ sessionId: session.id, fallback: true });
+      } else {
+        throw error;
+      }
+    }
   } catch (error) {
-    console.error('Error creating checkout session:', error);
-    res.status(500).json({ error: 'Failed to create checkout session' });
+    console.error('Error creating fundamentals checkout session:', error);
+    return res.status(400).json({
+      error: error.message || 'Failed to create checkout session'
+    });
   }
 } 
