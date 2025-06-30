@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "functions": {
+    "api/stripe-webhook.js": {
+      "maxDuration": 30
+    },
+    "api/create-checkout-session.js": {
+      "maxDuration": 30
+    },
+    "api/professional-breakthrough-waitlist.js": {
+      "maxDuration": 10
+    }
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "https://clashcreation.com"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type, Authorization"
+        }
+      ]
+    }
+  ]
+} 
