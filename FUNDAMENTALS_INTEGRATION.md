@@ -12,7 +12,7 @@ The fundamentals backend APIs are set up to work with your `clashcreation.com/ac
 **Request Body:**
 ```json
 {
-  "priceId": "price_1RVIVNBlWJBhJeWFhzrFPZfx",  // required - Stripe price ID
+  "priceId": "price_1RWAHLBlWJBhJeWF4ZXPS7eL",  // required - Stripe price ID
   "customerEmail": "user@example.com"            // optional
 }
 ```
@@ -56,7 +56,7 @@ export default function FundamentalsPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          priceId: 'price_1RVIVNBlWJBhJeWFhzrFPZfx', // The Viral Video Fundamentals price ID
+          priceId: 'price_1RWAHLBlWJBhJeWF4ZXPS7eL', // The Viral Video Fundamentals price ID
           customerEmail: '' // optional - can capture from form
         }),
       });
@@ -173,7 +173,7 @@ No coupons or discounts - full price only.
 ## Product Details
 
 - **Product:** "The Viral Video Fundamentals: Your First 1,000,000 views"
-- **Price ID:** `price_1RVIVNBlWJBhJeWFhzrFPZfx` (same as masterclass)
+- **Price ID:** `price_1RWAHLBlWJBhJeWF4ZXPS7eL`
 - **Pricing:** Full price only (no coupons)
 - **Kajabi:** Same activation URL as secrets
 - **ConvertKit:** Same purchase form as secrets (8131472)
