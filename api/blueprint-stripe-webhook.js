@@ -22,6 +22,7 @@ async function fetchJson(url, options) {
 }
 
 export default async function handler(req, res) {
+  console.log('[BLUEPRINT WEBHOOK] Handler invoked.');
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -33,8 +34,26 @@ export default async function handler(req, res) {
   let event;
   try {
     event = stripe.webhooks.constructEvent(buf, sig, endpointSecret);
+    console.log('[BLUEPRINT WEBHOOK] Stripe event received:', event.type);
+
+    // Early return if this is not a Blueprint purchase
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      
+      // Check both metadata and line items to ensure this is a Blueprint purchase
+      const isBlueprint = session.metadata?.product === 'Blueprint Program' && 
+        session.line_items?.data?.some(item => 
+          item.price?.unit_amount === 213500 && // £2135.00 in pence
+          item.price?.currency === 'gbp'
+        );
+
+      if (!isBlueprint) {
+        console.log('[BLUEPRINT WEBHOOK] Skipping non-Blueprint purchase');
+        return res.status(200).json({ received: true });
+      }
+    }
   } catch (err) {
-    console.error('Blueprint webhook signature verification failed:', err.message);
+    console.error('[BLUEPRINT WEBHOOK] Signature verification failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 

@@ -22,6 +22,7 @@ async function fetchJson(url, options) {
 }
 
 export default async function handler(req, res) {
+  console.log('[CREATOR WEBHOOK] Handler invoked.');
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -33,11 +34,34 @@ export default async function handler(req, res) {
   let event;
   try {
     event = stripe.webhooks.constructEvent(buf, sig, endpointSecret);
+    console.log('[CREATOR WEBHOOK] Stripe event received:', event.type);
+
+    // Early return if this is not a Creator purchase
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      
+      // Check both metadata and line items to ensure this is a Creator purchase
+      const CREATOR_PRICE_IDS = [
+        'price_1RaSn5BlWJBhJeWFMvVu8RG1', // USD
+        'price_1RaSmIBlWJBhJeWFBpboNdnW'  // GBP
+      ];
+
+      const isCreator = session.metadata?.product === 'Creator' && 
+        session.line_items?.data?.some(item => 
+          CREATOR_PRICE_IDS.includes(item.price?.id)
+        );
+
+      if (!isCreator) {
+        console.log('[CREATOR WEBHOOK] Skipping non-Creator purchase');
+        return res.status(200).json({ received: true });
+      }
+    }
   } catch (err) {
-    console.error('Creator webhook signature verification failed:', err.message);
+    console.error('[CREATOR WEBHOOK] Signature verification failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
+  // Continue with Creator-specific processing
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     if (session.payment_status === 'paid') {
