@@ -14,8 +14,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { email, first_name } = req.body;
-    if (!email || !first_name) {
+    const { email, name } = req.body;
+    if (!email || !name) {
       return res.status(400).json({ success: false, error: 'Email and name are required' });
     }
 
@@ -28,7 +28,7 @@ export default async function handler(req, res) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email,
-        first_name,
+        first_name: name,
         fields: {
           source: 'professional_breakthrough_website',
           signup_date: new Date().toISOString(),
