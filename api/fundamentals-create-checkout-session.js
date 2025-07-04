@@ -20,6 +20,10 @@ export default async function handler(req, res) {
 
   const { customerEmail, couponCode } = req.body;
 
+  // Coupon IDs in Stripe (update these if your actual coupon IDs differ)
+  const COUPON_LION = 'LION'; // 50% off coupon in Stripe
+  const COUPON_EAGLE_EYES = 'EAGLE-EYES'; // $385 off coupon in Stripe (so user pays $365)
+
   try {
     let sessionConfig = {
       mode: 'payment',
@@ -40,14 +44,34 @@ export default async function handler(req, res) {
       customer_creation: 'always'
     };
 
-    // Only add discount if LION coupon code is provided
-    if (couponCode === 'LION') {
-      sessionConfig.discounts = [{
-        coupon: 'LION'
-      }];
+    // Coupon logic
+    if (couponCode === COUPON_LION) {
+      sessionConfig.discounts = [{ coupon: COUPON_LION }];
+    } else if (couponCode === COUPON_EAGLE_EYES) {
+      sessionConfig.discounts = [{ coupon: COUPON_EAGLE_EYES }];
+    } else if (couponCode) {
+      // Invalid code
+      return res.status(400).json({ error: 'Invalid coupon code.' });
     }
 
-    const session = await stripe.checkout.sessions.create(sessionConfig);
+    // Create the session
+    let session;
+    try {
+      session = await stripe.checkout.sessions.create(sessionConfig);
+    } catch (error) {
+      // Handle coupon limit reached (e.g., LION max redemptions)
+      if (
+        error &&
+        error.raw &&
+        error.raw.type === 'invalid_request_error' &&
+        error.raw.message &&
+        error.raw.message.includes('max_redemptions')
+      ) {
+        return res.status(400).json({ error: 'Sorry, the LION discount limit has been reached.' });
+      }
+      // Other Stripe errors
+      throw error;
+    }
     return res.status(200).json({ sessionId: session.id });
   } catch (error) {
     console.error('Error creating checkout session:', error);
