@@ -8,7 +8,6 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   
   if (req.method === 'OPTIONS') {
-    // Respond to preflight request
     return res.status(200).end();
   }
   
@@ -18,24 +17,9 @@ export default async function handler(req, res) {
   
   const { customerEmail } = req.body;
   
-  // Fixed price for Blueprint: £2135
-  const line_items = [
-    {
-      price_data: {
-        currency: 'gbp',
-        unit_amount: 213500, // £2135.00 in pence
-        product_data: {
-          name: 'Blueprint Program',
-          description: 'Complete Blueprint training program',
-          tax_code: 'txcd_10103000' // Training services tax code (explicit)
-        },
-        tax_behavior: 'exclusive' // Explicitly set for B2B
-      },
-      quantity: 1,
-    },
-  ];
-  
   try {
+    // Create session with BOTH price options
+    // Stripe will automatically select based on customer's location
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       success_url: `https://clashcreation.com/work-with-us/blueprint/success?session_id={CHECKOUT_SESSION_ID}`,
@@ -43,10 +27,10 @@ export default async function handler(req, res) {
       automatic_tax: { enabled: true },
       tax_id_collection: { 
         enabled: true,
-        required: 'if_supported' // Forces collection where possible for B2B
+        required: 'if_supported'
       },
       customer_update: {
-        address: 'auto', // Automatically update customer address
+        address: 'auto',
         name: 'auto'
       },
       invoice_creation: {
@@ -55,22 +39,40 @@ export default async function handler(req, res) {
           metadata: {
             transaction_type: 'b2b',
             product: 'Blueprint Program',
-            payment_type: 'one-time',
-            price: '£2135'
+            payment_type: 'one-time'
           }
         }
       },
-      line_items,
+      line_items: [
+        {
+          price_data: {
+            currency: 'gbp',
+            unit_amount: 213500, // £2135.00
+            product_data: {
+              name: 'Blueprint Program',
+              description: 'Complete Blueprint training program',
+              tax_code: 'txcd_10103000'
+            },
+            tax_behavior: 'exclusive'
+          },
+          quantity: 1,
+        }
+      ],
+      // This is the key: allow automatic currency conversion
+      currency_options: {
+        usd: {
+          unit_amount: 295000 // $2950.00 when shown in USD
+        }
+      },
       metadata: {
         product: 'Blueprint Program',
-        payment_type: 'one-time',
-        price: '£2135'
+        payment_type: 'one-time'
       },
       billing_address_collection: 'required',
       customer_email: customerEmail || undefined,
       customer_creation: 'always',
       shipping_address_collection: {
-        allowed_countries: ['GB', 'US'] // Limit to your markets
+        allowed_countries: ['GB', 'US']
       }
     });
     
