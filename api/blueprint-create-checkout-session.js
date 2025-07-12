@@ -24,21 +24,31 @@ export default async function handler(req, res) {
       cancel_url: `https://clashcreation.com/work-with-us/blueprint/cancel`,
       
       line_items: [{
-        price: 'price_1RjuN4BlWJBhJeWFeWpiw2oO', // Your new multi-currency price
+        price: 'price_1RjuN4BlWJBhJeWFeWpiw2oO', // Your multi-currency price
         quantity: 1
       }],
       
-      // Don't set currency - let Stripe's adaptive pricing work with your defined prices
+      automatic_tax: { 
+        enabled: true,
+        liability: {
+          type: 'self' // This tells Stripe YOU handle tax liability
+        }
+      },
       
-      automatic_tax: { enabled: true },
       tax_id_collection: { 
         enabled: true,
-        required: 'if_supported'
+        required: 'if_supported' // This should force tax ID collection for B2B
       },
       
       billing_address_collection: 'required',
       customer_email: customerEmail || undefined,
       customer_creation: 'always',
+      
+      // Add this to help with location detection
+      customer_update: {
+        address: 'auto',
+        name: 'auto'
+      },
       
       metadata: {
         product: 'Blueprint Program',
