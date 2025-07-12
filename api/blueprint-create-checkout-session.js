@@ -17,43 +17,29 @@ export default async function handler(req, res) {
   
   const { customerEmail } = req.body;
   
-  // Detect country BEFORE creating session
-  let isUSCustomer = false;
+  // Your new price IDs
+  const GBP_PRICE_ID = 'price_1Rju1HBlWJBhJeWFEKp9gmjf'; // £2,135
+  const USD_PRICE_ID = 'price_1Rju1MBlWJBhJeWFjjyI1k0e'; // $2,950
+  
+  // Detect if customer is from US
+  let priceId = GBP_PRICE_ID; // Default to GBP
   try {
     const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress;
     if (ip && !ip.includes('127.0.0.1')) {
       const geoResponse = await fetch(`https://ipapi.co/${ip}/country_code/`);
       if (geoResponse.ok) {
         const countryCode = await geoResponse.text();
-        isUSCustomer = countryCode.trim() === 'US';
+        if (countryCode.trim() === 'US') {
+          priceId = USD_PRICE_ID;
+        }
       }
     }
   } catch (e) {
-    console.log('Geo detection failed, assuming non-US');
+    console.log('Geo detection failed, using GBP');
   }
   
-  // Set currency and amount based on detected location
-  const currency = isUSCustomer ? 'usd' : 'gbp';
-  const amount = isUSCustomer ? 295000 : 213500; // $2950 or £2135
-  
-  const line_items = [
-    {
-      price_data: {
-        currency: currency, // This MUST match the customer's location
-        unit_amount: amount,
-        product_data: {
-          name: 'Blueprint Program',
-          description: 'Complete Blueprint training program',
-          tax_code: 'txcd_10103000'
-        },
-        tax_behavior: 'exclusive'
-      },
-      quantity: 1,
-    },
-  ];
-  
   try {
-    const sessionParams = {
+    const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       success_url: `https://clashcreation.com/work-with-us/blueprint/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `https://clashcreation.com/work-with-us/blueprint/cancel`,
@@ -62,31 +48,19 @@ export default async function handler(req, res) {
         enabled: true,
         required: 'if_supported'
       },
-      line_items,
+      line_items: [{
+        price: priceId,
+        quantity: 1
+      }],
       metadata: {
         product: 'Blueprint Program',
         payment_type: 'one-time',
-        price: currency === 'usd' ? '$2,950' : '£2,135',
-        currency: currency,
-        detected_country: isUSCustomer ? 'US' : 'Other'
+        price: priceId === USD_PRICE_ID ? '$2,950' : '£2,135'
       },
       billing_address_collection: 'required',
       customer_email: customerEmail || undefined,
-      customer_creation: 'always',
-      // IMPORTANT: Disable automatic currency conversion
-      payment_method_options: {
-        card: {
-          request_three_d_secure: 'automatic'
-        }
-      }
-    };
-    
-    // For US customers, restrict to USD only
-    if (isUSCustomer) {
-      sessionParams.currency = 'usd'; // Force USD for US customers
-    }
-
-    const session = await stripe.checkout.sessions.create(sessionParams);
+      customer_creation: 'always'
+    });
     
     return res.status(200).json({ sessionId: session.id });
   } catch (error) {
