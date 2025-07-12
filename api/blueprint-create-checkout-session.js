@@ -17,44 +17,49 @@ export default async function handler(req, res) {
   
   const { customerEmail } = req.body;
   
+  // Use the separate prices you created earlier
+  const GBP_PRICE_ID = 'price_1Rju1HBlWJBhJeWFEKp9gmjf'; // £2,135
+  const USD_PRICE_ID = 'price_1Rju1MBlWJBhJeWFjjyI1k0e'; // $2,950
+  
+  // Detect if customer is from US
+  let priceId = GBP_PRICE_ID; // Default to GBP
+  try {
+    const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress;
+    if (ip && !ip.includes('127.0.0.1')) {
+      const geoResponse = await fetch(`https://ipapi.co/${ip}/country_code/`);
+      if (geoResponse.ok) {
+        const countryCode = await geoResponse.text();
+        if (countryCode.trim() === 'US') {
+          priceId = USD_PRICE_ID;
+        }
+      }
+    }
+  } catch (e) {
+    console.log('Geo detection failed, using GBP');
+  }
+  
   try {
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       success_url: `https://clashcreation.com/work-with-us/blueprint/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `https://clashcreation.com/work-with-us/blueprint/cancel`,
-      
-      line_items: [{
-        price: 'price_1RjuN4BlWJBhJeWFeWpiw2oO', // Your multi-currency price
-        quantity: 1
-      }],
-      
-      automatic_tax: { 
-        enabled: true,
-        liability: {
-          type: 'self' // This tells Stripe YOU handle tax liability
-        }
-      },
-      
+      automatic_tax: { enabled: true },
       tax_id_collection: { 
         enabled: true,
-        required: 'if_supported' // This should force tax ID collection for B2B
+        required: 'if_supported'
       },
-      
-      billing_address_collection: 'required',
-      customer_email: customerEmail || undefined,
-      customer_creation: 'always',
-      
-      // Add this to help with location detection
-      customer_update: {
-        address: 'auto',
-        name: 'auto'
-      },
-      
+      line_items: [{
+        price: priceId,
+        quantity: 1
+      }],
       metadata: {
         product: 'Blueprint Program',
         payment_type: 'one-time',
-        price_id: 'price_1RjuN4BlWJBhJeWFeWpiw2oO'
-      }
+        price: priceId === USD_PRICE_ID ? '$2,950' : '£2,135'
+      },
+      billing_address_collection: 'required',
+      customer_email: customerEmail || undefined,
+      customer_creation: 'always'
     });
     
     return res.status(200).json({ sessionId: session.id });
