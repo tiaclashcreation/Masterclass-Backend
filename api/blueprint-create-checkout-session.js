@@ -17,26 +17,46 @@ export default async function handler(req, res) {
   
   const { customerEmail } = req.body;
   
-  // Use the separate prices you created earlier
+  // Use the separate prices
   const GBP_PRICE_ID = 'price_1Rju1HBlWJBhJeWFEKp9gmjf'; // £2,135
   const USD_PRICE_ID = 'price_1Rju1MBlWJBhJeWFjjyI1k0e'; // $2,950
   
-  // Detect if customer is from US
-  let priceId = GBP_PRICE_ID; // Default to GBP
+  // Better geolocation detection
+  let priceId = GBP_PRICE_ID;
+  let detectedCountry = 'Unknown';
+  
   try {
-    const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress;
-    if (ip && !ip.includes('127.0.0.1')) {
-      const geoResponse = await fetch(`https://ipapi.co/${ip}/country_code/`);
-      if (geoResponse.ok) {
-        const countryCode = await geoResponse.text();
-        if (countryCode.trim() === 'US') {
-          priceId = USD_PRICE_ID;
+    // Get IP - Vercel puts the real IP in x-forwarded-for
+    const forwarded = req.headers['x-forwarded-for'];
+    const ip = forwarded ? forwarded.split(',')[0].trim() : 
+               req.headers['x-real-ip'] || 
+               req.connection?.remoteAddress;
+    
+    console.log('Detected IP:', ip); // Debug log
+    
+    // Don't try geolocation for localhost
+    if (ip && !ip.includes('127.0.0.1') && !ip.includes('::1')) {
+      try {
+        const geoResponse = await fetch(`https://ipapi.co/${ip}/json/`);
+        const geoData = await geoResponse.json();
+        
+        console.log('Geo response:', geoData); // Debug log
+        
+        if (geoData && geoData.country_code) {
+          detectedCountry = geoData.country_code;
+          if (geoData.country_code === 'US') {
+            priceId = USD_PRICE_ID;
+          }
         }
+      } catch (geoError) {
+        console.error('Geo lookup failed:', geoError);
       }
     }
   } catch (e) {
-    console.log('Geo detection failed, using GBP');
+    console.error('IP detection error:', e);
   }
+  
+  console.log('Using price:', priceId, 'for country:', detectedCountry); // Debug log
   
   try {
     const session = await stripe.checkout.sessions.create({
@@ -55,7 +75,9 @@ export default async function handler(req, res) {
       metadata: {
         product: 'Blueprint Program',
         payment_type: 'one-time',
-        price: priceId === USD_PRICE_ID ? '$2,950' : '£2,135'
+        price: priceId === USD_PRICE_ID ? '$2,950' : '£2,135',
+        detected_country: detectedCountry,
+        detected_ip: req.headers['x-forwarded-for'] || 'none'
       },
       billing_address_collection: 'required',
       customer_email: customerEmail || undefined,
