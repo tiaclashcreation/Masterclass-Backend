@@ -17,32 +17,43 @@ export default async function handler(req, res) {
   
   const { customerEmail } = req.body;
   
-  // Your new price IDs
+  // Your price IDs
   const GBP_PRICE_ID = 'price_1Rju1HBlWJBhJeWFEKp9gmjf'; // £2,135
   const USD_PRICE_ID = 'price_1Rju1MBlWJBhJeWFjjyI1k0e'; // $2,950
   
   // Detect if customer is from US
-  let priceId = GBP_PRICE_ID; // Default to GBP
+  let isUSCustomer = false;
+  let detectedCountry = 'GB';
+  
   try {
-    const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress;
-    if (ip && !ip.includes('127.0.0.1')) {
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 
+               req.socket?.remoteAddress;
+    
+    if (ip && !ip.includes('127.0.0.1') && !ip.includes('::1')) {
       const geoResponse = await fetch(`https://ipapi.co/${ip}/country_code/`);
       if (geoResponse.ok) {
         const countryCode = await geoResponse.text();
-        if (countryCode.trim() === 'US') {
-          priceId = USD_PRICE_ID;
-        }
+        detectedCountry = countryCode.trim();
+        isUSCustomer = detectedCountry === 'US';
       }
     }
   } catch (e) {
     console.log('Geo detection failed, using GBP');
   }
   
+  // Select price and currency based on location
+  const priceId = isUSCustomer ? USD_PRICE_ID : GBP_PRICE_ID;
+  const currency = isUSCustomer ? 'usd' : 'gbp';
+  
   try {
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       success_url: `https://clashcreation.com/work-with-us/blueprint/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `https://clashcreation.com/work-with-us/blueprint/cancel`,
+      
+      // IMPORTANT: Explicitly set the currency to prevent conversion options
+      currency: currency,
+      
       automatic_tax: { enabled: true },
       tax_id_collection: { 
         enabled: true,
@@ -55,7 +66,8 @@ export default async function handler(req, res) {
       metadata: {
         product: 'Blueprint Program',
         payment_type: 'one-time',
-        price: priceId === USD_PRICE_ID ? '$2,950' : '£2,135'
+        price: isUSCustomer ? '$2,950' : '£2,135',
+        detected_country: detectedCountry
       },
       billing_address_collection: 'required',
       customer_email: customerEmail || undefined,
