@@ -17,9 +17,35 @@ export default async function handler(req, res) {
   
   const { customerEmail } = req.body;
   
+  // Get customer's country from their IP
+  let customerCountry = 'GB'; // Default to UK
   try {
-    // Create session with BOTH price options
-    // Stripe will automatically select based on customer's location
+    // Get IP from headers (works with Vercel, Netlify, etc.)
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 
+               req.headers['x-real-ip'] || 
+               req.connection?.remoteAddress ||
+               req.socket?.remoteAddress;
+    
+    // Use a geolocation service
+    if (ip && !ip.includes('127.0.0.1') && !ip.includes('::1')) {
+      const geoResponse = await fetch(`https://ipapi.co/${ip}/json/`);
+      if (geoResponse.ok) {
+        const geoData = await geoResponse.json();
+        customerCountry = geoData.country_code || 'GB';
+      }
+    }
+  } catch (error) {
+    console.error('Geolocation failed, using default GB:', error);
+  }
+  
+  // Determine price based on detected location
+  // US gets USD pricing, everyone else gets GBP pricing
+  const isUSCustomer = customerCountry === 'US';
+  const currency = isUSCustomer ? 'usd' : 'gbp';
+  const amount = isUSCustomer ? 295000 : 213500; // $2950.00 or £2135.00
+  const priceDisplay = isUSCustomer ? '$2,950' : '£2,135';
+  
+  try {
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       success_url: `https://clashcreation.com/work-with-us/blueprint/success?session_id={CHECKOUT_SESSION_ID}`,
@@ -27,7 +53,7 @@ export default async function handler(req, res) {
       automatic_tax: { enabled: true },
       tax_id_collection: { 
         enabled: true,
-        required: 'if_supported'
+        required: 'if_supported' // Forces collection for B2B
       },
       customer_update: {
         address: 'auto',
@@ -39,46 +65,40 @@ export default async function handler(req, res) {
           metadata: {
             transaction_type: 'b2b',
             product: 'Blueprint Program',
-            payment_type: 'one-time'
+            payment_type: 'one-time',
+            price: priceDisplay,
+            currency: currency,
+            detected_country: customerCountry
           }
         }
       },
       line_items: [
         {
           price_data: {
-            currency: 'gbp',
-            unit_amount: 213500, // £2135.00
+            currency: currency,
+            unit_amount: amount,
             product_data: {
               name: 'Blueprint Program',
               description: 'Complete Blueprint training program',
-              tax_code: 'txcd_10103000'
+              tax_code: 'txcd_10103000' // Training services
             },
-            tax_behavior: 'exclusive'
+            tax_behavior: 'exclusive' // B2B tax exclusive
           },
           quantity: 1,
         }
       ],
-      // This is the key: allow automatic currency conversion
-      currency_options: {
-        usd: {
-          unit_amount: 295000 // $2950.00 when shown in USD
-        }
-      },
       metadata: {
         product: 'Blueprint Program',
-        payment_type: 'one-time'
+        payment_type: 'one-time',
+        price: priceDisplay,
+        currency: currency,
+        detected_country: customerCountry
       },
       billing_address_collection: 'required',
       customer_email: customerEmail || undefined,
       customer_creation: 'always',
-      shipping_address_collection: {
-        allowed_countries: ['GB', 'US']
-      }
+      // Remove shipping_address_collection entirely, or include all countries you ship to
+      // shipping_address_collection: {
+      //   allowed_countries: ['US', 'GB', 'CA', 'AU', 'NZ', 'IE', 'FR', 'DE', 'NL', 'ES', 'IT', ...]
+      // }
     });
-    
-    return res.status(200).json({ sessionId: session.id });
-  } catch (error) {
-    console.error('Error creating blueprint checkout session:', error);
-    return res.status(400).json({ error: error.message || 'Failed to create checkout session' });
-  }
-}
