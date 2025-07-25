@@ -1,7 +1,7 @@
 import Stripe from 'stripe';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-const PRICE_ID = 'price_1RWAHLBlWJBhJeWF4ZXPS7eL';
+const PRICE_ID = 'price_1RoiXYBlWJBhJeWFfnDbjwOU'; // New £200 price ID
 
 export default async function handler(req, res) {
   // CORS headers
@@ -21,8 +21,8 @@ export default async function handler(req, res) {
   const { customerEmail, couponCode } = req.body;
 
   // Coupon IDs in Stripe (update these if your actual coupon IDs differ)
-  const COUPON_LION = 'LION'; // 50% off coupon in Stripe
-  const COUPON_EAGLE_EYES = 'EAGLE-EYES'; // $385 off coupon in Stripe (so user pays $365)
+  const COUPON_LION = 'LION'; // No additional discount, shows £200
+  const COUPON_EAGLE_EYES = 'EAGLE-EYES'; // £10 off coupon in Stripe (so user pays £190)
 
   try {
     let sessionConfig = {
@@ -46,7 +46,8 @@ export default async function handler(req, res) {
 
     // Coupon logic
     if (couponCode === COUPON_LION) {
-      sessionConfig.discounts = [{ coupon: COUPON_LION }];
+      // LION shows base price (£200) - no additional discount needed
+      // No discount applied, user pays full £200
     } else if (couponCode === COUPON_EAGLE_EYES) {
       sessionConfig.discounts = [{ coupon: COUPON_EAGLE_EYES }];
     } else if (couponCode) {
@@ -59,7 +60,7 @@ export default async function handler(req, res) {
     try {
       session = await stripe.checkout.sessions.create(sessionConfig);
     } catch (error) {
-      // Handle coupon limit reached (e.g., LION max redemptions)
+      // Handle coupon limit reached (e.g., EAGLE-EYES max redemptions)
       if (
         error &&
         error.raw &&
@@ -67,7 +68,7 @@ export default async function handler(req, res) {
         error.raw.message &&
         error.raw.message.includes('max_redemptions')
       ) {
-        return res.status(400).json({ error: 'Sorry, the LION discount limit has been reached.' });
+        return res.status(400).json({ error: 'Sorry, the discount limit has been reached.' });
       }
       // Other Stripe errors
       throw error;
